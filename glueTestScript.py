@@ -1,46 +1,50 @@
+---
 AWSTemplateFormatVersion: '2010-09-09'
-Parameters:
-  GitHubScript:
-    Type: String
-    Description: Name of the script file stored in the Github repository
-  GitHubRepo:
-    Type: String
-    Description: URL of the Github repository
 Resources:
-  GlueJob:
-    Type: 'AWS::Glue::Job'
+  GitHubRepo:
+    Type: "AWS::CodeCommit::Repository"
     Properties:
-      Command:
-        Name: 'pythonshell'
-        ScriptLocation: !Sub 'https://raw.githubusercontent.com/${GitHubRepo}/master/${GitHubScript}'
-      DefaultArguments:
-        '--job-bookmark-option': 'job-bookmark-disable'
-      Description: 'A Glue Job to pull a script from a Github repository'
-      ExecutionProperty:
-        MaxConcurrentRuns: 1
-      Name: !Ref 'AWS::StackName'
-      Role: !GetAtt [GlueServiceRole, Arn]
-      Timeout: 2880
-      MaxRetries: 0
-  GlueServiceRole:
-    Type: 'AWS::IAM::Role'
+      RepositoryName: my-repo
+      RepositoryDescription: My CodeCommit repository
+
+  GitHubScript:
+    Type: "AWS::S3::Object"
+    Properties:
+      Bucket: my-bucket
+      Key: scripts/my-script.py
+      Content: |
+        # Add the script contents here
+
+  GlueJobRole:
+    Type: "AWS::IAM::Role"
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
-          - Effect: 'Allow'
-            Principal:
-              Service:
-                - 'glue.amazonaws.com'
-            Action: 'sts:AssumeRole'
+        - Action:
+          - "sts:AssumeRole"
+          Effect: "Allow"
+          Principal:
+            Service:
+            - "glue.amazonaws.com"
+          Version: "2012-10-17"
       Policies:
-        - PolicyName: 'GlueServiceRolePolicy'
+        - PolicyName: "glue-job-s3-policy"
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
-              - Effect: 'Allow'
-                Action:
-                  - 'glue:GetJobRuns'
-                  - 'glue:BatchGetJobs'
-                  - 'glue:StartJobRun'
-                Resource: '*'
+            - Effect: "Allow"
+              Action:
+              - "s3:GetObject"
+              Resource:
+              - !Sub "arn:aws:s3:::my-bucket/scripts/my-script.py"
+
+  GlueJob:
+    Type: "AWS::Glue::Job"
+    Properties:
+      Command:
+        Name: "glueetl"
+        ScriptLocation: !Sub "s3://my-bucket/scripts/my-script.py"
+      Role: !GetAtt GlueJobRole.Arn
+      AllocatedCapacity: 2
+      Timeout: 2880
